@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>南屯 自走車控制台（自組版面）</title>
+<style>
+  :root{
+    --bg:#eef1f6; --card:#fff; --ink:#1f2833; --muted:#71798a;
+    --brand:#2b6cb0; --brand-d:#22528a; --ok:#2f9e57; --warn:#c0392b;
+    --line:#e1e6ee; --grid:#dfe6f0;
+    --shadow:0 2px 10px rgba(30,50,80,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif;
+    background:var(--bg);color:var(--ink);user-select:none;display:flex;flex-direction:column;height:100vh}
+
+  /* 頂部工具列 */
+  .top{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card);
+    border-bottom:1px solid var(--line);flex-wrap:wrap;box-shadow:var(--shadow);z-index:5}
+  .dot{width:11px;height:11px;border-radius:50%;background:#c3ccd8;flex:none}
+  .dot.on{background:var(--ok)}
+  .stat{font-size:13px;font-weight:600;min-width:70px}
+  button{font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;border:none;
+    border-radius:10px;padding:9px 13px;color:#fff;background:var(--brand);touch-action:manipulation}
+  button:active{transform:scale(.96)}
+  button.ghost{background:#eef2f7;color:var(--brand)}
+  button.warn{background:#f3e6e6;color:var(--warn)}
+  .seg{display:flex;background:#e7ecf3;border-radius:10px;padding:3px;gap:3px}
+  .seg button{background:transparent;color:var(--muted);padding:7px 12px;border-radius:8px}
+  .seg button.active{background:var(--brand);color:#fff}
+  .spacer{flex:1}
+  select{font-family:inherit;font-size:14px;padding:8px;border:1px solid var(--line);border-radius:10px;background:#fff}
+
+  /* 元件選盤 */
+  .palette{display:flex;gap:6px;flex-wrap:wrap;padding:6px 10px;background:#f7f9fc;border-bottom:1px solid var(--line)}
+  .palette button{background:#fff;color:var(--ink);border:1px solid var(--line);font-size:13px;padding:7px 10px}
+  .palette .cat{font-size:12px;color:var(--muted);align-self:center;margin:0 2px 0 6px}
+
+  /* 畫布 */
+  #canvas{position:relative;flex:1;overflow:auto}
+  #canvas.edit{background-image:linear-gradient(var(--grid) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
+  .w{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:var(--shadow);padding:8px;display:flex;flex-direction:column}
+  .w .cap{font-size:12px;color:var(--muted);text-align:center;margin-bottom:2px}
+  .edit .w{cursor:move}
+  .w .drag{position:absolute;inset:0;border-radius:14px;z-index:3;display:none}
+  .edit .w .drag{display:block}
+  .edit .w .body{pointer-events:none}
+  .w .del{position:absolute;top:-9px;right:-9px;width:24px;height:24px;border-radius:50%;
+    background:var(--warn);color:#fff;font-size:15px;line-height:24px;text-align:center;z-index:4;display:none}
+  .edit .w .del{display:block}
+
+  /* 各元件 */
+  .dpad{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);gap:6px;flex:1}
+  .dpad button{border-radius:12px;font-size:20px;padding:0;height:100%}
+  .dpad .u{grid-area:1/2}.dpad .l{grid-area:2/1}.dpad .r{grid-area:2/3}.dpad .d{grid-area:3/2}
+  .dpad .c{grid-area:2/2;background:#eef2f7;color:var(--muted);font-size:12px}
+  .bigbtn{flex:1;border-radius:12px;font-size:20px}
+  .sl{display:flex;flex-direction:column;justify-content:center;flex:1}
+  .sl .row{display:flex;justify-content:space-between;font-size:13px;font-weight:700}
+  .sl input{width:100%;height:30px;margin-top:6px}
+  .joy{flex:1;position:relative;border-radius:14px;background:#eef2f7;overflow:hidden}
+  .joy .knob{position:absolute;width:44px;height:44px;border-radius:50%;background:var(--brand);
+    left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+  .num{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center}
+  .num .v{font-size:30px;font-weight:800}
+  .ring{position:relative;width:92px;height:92px;border-radius:50%;margin:auto;
+    background:conic-gradient(var(--brand) calc(var(--p,0)*1%),#e6ebf2 0);display:grid;place-items:center}
+  .ring::before{content:'';position:absolute;width:66px;height:66px;border-radius:50%;background:var(--card)}
+  .ring b{position:relative;font-size:18px;font-weight:800}
+  .led{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+  .led .lamp{width:46px;height:46px;border-radius:50%;background:#cfd6e0;box-shadow:inset 0 2px 6px rgba(0,0,0,.15)}
+  .led .lamp.on{background:var(--ok);box-shadow:0 0 14px rgba(47,158,87,.7)}
+  canvas{width:100%;flex:1;display:block}
+
+  /* 提示 / 設定視窗 */
+  .hint{margin:10px;padding:12px 14px;background:#fff6e6;border:1px solid #f0d9a8;color:#8a6d1f;
+    border-radius:12px;font-size:14px;line-height:1.6;display:none}
+  .hint.show{display:block}
+  .modal{position:fixed;inset:0;background:rgba(20,30,45,.45);display:none;align-items:center;justify-content:center;z-index:20;padding:16px}
+  .modal.show{display:flex}
+  .sheet{background:#fff;border-radius:16px;padding:18px;width:100%;max-width:340px}
+  .sheet h3{margin:0 0 12px;font-size:17px}
+  .fld{margin-bottom:10px}
+  .fld label{font-size:13px;color:var(--muted);display:block;margin-bottom:4px}
+  .fld input,.fld select{width:100%;font-size:15px;padding:9px;border:1px solid var(--line);border-radius:10px}
+  .sheet .acts{display:flex;gap:8px;margin-top:14px}
+  .sheet .acts button{flex:1}
+  .empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:#9aa4b2;font-size:15px;text-align:center;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="dot" id="dot"></div>
+  <div class="stat" id="stat">未連線</div>
+  <button id="conn">連線</button>
+  <div class="seg">
+    <button id="mEdit" class="active">編輯</button>
+    <button id="mPlay">遊玩</button>
+  </div>
+  <div class="spacer"></div>
+  <select id="layouts" title="版面"></select>
+  <button class="ghost" id="save">另存版面</button>
+  <button class="warn" id="clear">清空</button>
+</div>
+
+<div class="palette" id="palette">
+  <span class="cat">MoonCar</span>
+  <button data-preset="p_drive">🚗 駕駛</button>
+  <button data-preset="p_speed">⚡ 速度</button>
+  <button data-preset="p_line">🛣️ 循跡</button>
+  <button data-preset="p_color">🎨 顏色</button>
+  <button data-preset="p_light">💡 光線</button>
+  <button data-preset="p_dist">📏 距離</button>
+  <span class="cat">遙控</span>
+  <button data-add="dpad">＋方向鍵</button>
+  <button data-add="button">＋按鈕</button>
+  <button data-add="slider">＋滑桿</button>
+  <button data-add="joystick">＋搖桿</button>
+  <button data-add="drive">＋駕駛</button>
+  <span class="cat">儀表板</span>
+  <button data-add="number">＋數字卡</button>
+  <button data-add="chart">＋折線圖</button>
+  <button data-add="gauge">＋儀表盤</button>
+  <button data-add="led">＋燈號</button>
+</div>
+
+<div class="hint show" id="hint">
+  👉 <b>編輯模式</b>：點上方元件加到畫布、拖曳移動、點元件可設定、右上角 ✕ 刪除。<br>
+  排好後切到 <b>遊玩模式</b> 就能操作。首次使用請用 <b>Bluefy</b> 瀏覽器開啟並按「連線」。
+</div>
+
+<div id="canvas" class="edit">
+  <div class="empty" id="empty">畫布是空的 —— 從上方選盤加入元件</div>
+</div>
+
+<!-- 設定視窗 -->
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h3 id="mTitle">設定</h3>
+    <div id="mFields"></div>
+    <div class="acts">
+      <button class="ghost" id="mCancel">取消</button>
+      <button id="mOk">確定</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const UART="6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+
+/* ===================== 元件定義 ===================== */
+const TYPE={
+  dpad:{name:"方向鍵",kind:"ctrl",w:180,h:180,cfg:{up:"FWD",down:"BACK",left:"LEFT",right:"RIGHT",stop:"STOP"}},
+  button:{name:"按鈕",kind:"ctrl",w:120,h:80,cfg:{label:"按鈕",cmd:"A",release:""}},
+  slider:{name:"滑桿",kind:"ctrl",w:230,h:92,cfg:{label:"速度",key:"SPD",min:0,max:100}},
+  joystick:{name:"搖桿",kind:"ctrl",w:180,h:190,cfg:{cmd:"J"}},
+  drive:{name:"駕駛",kind:"ctrl",w:200,h:180,cfg:{cmd:"DRV"}},
+  number:{name:"數字卡",kind:"dash",w:120,h:104,cfg:{label:"數值",key:""}},
+  chart:{name:"折線圖",kind:"dash",w:300,h:170,cfg:{label:"趨勢",key:""}},
+  gauge:{name:"儀表盤",kind:"dash",w:150,h:160,cfg:{label:"量表",key:"",min:0,max:100}},
+  led:{name:"燈號",kind:"dash",w:130,h:104,cfg:{label:"狀態",key:"",cmp:">",thr:50}},
+};
+const PRESETS={
+  p_drive:{type:"drive", cfg:{cmd:"DRV"}},
+  p_speed:{type:"slider", cfg:{label:"速度",key:"SPD",min:0,max:100}},
+  p_line: {type:"number", cfg:{label:"循跡",key:"LINE"}},
+  p_color:{type:"number", cfg:{label:"顏色",key:"COLOR"}},
+  p_light:{type:"gauge",  cfg:{label:"光線",key:"LIGHT",min:0,max:255}},
+  p_dist: {type:"gauge",  cfg:{label:"距離(cm)",key:"DIST",min:0,max:100}},
+};
+const SCHEMA={
+  dpad:[["up","▲ 送出",""],["down","▼ 送出",""],["left","◀ 送出",""],["right","▶ 送出",""],["stop","放開時送出",""]],
+  button:[["label","按鈕文字",""],["cmd","按下送出",""],["release","放開送出（可空）",""]],
+  slider:[["label","標籤",""],["key","代號（送出 代號:值）",""],["min","最小","n"],["max","最大","n"]],
+  joystick:[["cmd","前綴（送出 前綴:x,y）",""]],
+  drive:[["cmd","前綴（送出 前綴:狀態）",""]],
+  number:[["label","標籤",""],["key","顯示哪個感測值","k"]],
+  chart:[["label","標籤",""],["key","繪製哪個感測值","k"]],
+  gauge:[["label","標籤",""],["key","感測值","k"],["min","最小","n"],["max","最大","n"]],
+  led:[["label","標籤",""],["key","感測值","k"],["cmp","條件","c"],["thr","門檻","n"]],
+};
+
+/* ===================== 狀態 ===================== */
+let widgets=[], editMode=true, uid=1;
+let device=null,rxChar=null,txChar=null,connected=false,rxBuf="";
+const latest={}, seenKeys=new Set();
+
+/* ===================== 版面存讀（localStorage）===================== */
+const LS_CUR="mbcar_current", LS_ALL="mbcar_layouts";
+function persist(){ try{ localStorage.setItem(LS_CUR,JSON.stringify(widgets)); }catch(e){} }
+function loadCurrent(){ try{ const d=JSON.parse(localStorage.getItem(LS_CUR)); if(Array.isArray(d)){widgets=d; uid=Math.max(1,...d.map(w=>w.id))+1;} }catch(e){} }
+function allLayouts(){ try{ return JSON.parse(localStorage.getItem(LS_ALL))||{}; }catch(e){ return {}; } }
+function refreshLayoutList(){
+  const all=allLayouts(), sel=$("layouts"); sel.innerHTML='<option value="">— 版面 —</option>';
+  Object.keys(all).forEach(n=>{ const o=document.createElement("option"); o.value=n; o.textContent=n; sel.appendChild(o); });
+}
+$("save").onclick=()=>{
+  const name=prompt("版面名稱（例如：五年甲班）"); if(!name) return;
+  const all=allLayouts(); all[name]=widgets; localStorage.setItem(LS_ALL,JSON.stringify(all)); refreshLayoutList();
+  $("layouts").value=name;
+};
+$("layouts").onchange=e=>{
+  const all=allLayouts(), d=all[e.target.value]; if(!d) return;
+  widgets=JSON.parse(JSON.stringify(d)); uid=Math.max(1,...widgets.map(w=>w.id))+1; render(); persist();
+};
+$("clear").onclick=()=>{ if(confirm("清空畫布？")){ widgets=[]; render(); persist(); } };
+
+/* ===================== 模式切換 ===================== */
+$("mEdit").onclick=()=>setMode(true);
+$("mPlay").onclick=()=>setMode(false);
+function setMode(edit){
+  editMode=edit;
+  $("mEdit").classList.toggle("active",edit); $("mPlay").classList.toggle("active",!edit);
+  $("canvas").classList.toggle("edit",edit);
+  $("palette").style.display=edit?"flex":"none";
+  render();
+}
+
+/* ===================== 新增元件 ===================== */
+function addWidget(type,cfg){
+  const n=widgets.length;
+  widgets.push({id:uid++,type,x:20+(n%5)*26,y:20+(n%5)*26,cfg:JSON.parse(JSON.stringify(cfg))});
+  render(); persist();
+}
+document.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addWidget(b.dataset.add,TYPE[b.dataset.add].cfg));
+document.querySelectorAll("[data-preset]").forEach(b=>b.onclick=()=>{const p=PRESETS[b.dataset.preset];addWidget(p.type,p.cfg);});
+
+/* ===================== 繪製畫布 ===================== */
+function render(){
+  const cv=$("canvas");
+  cv.querySelectorAll(".w").forEach(e=>e.remove());
+  $("empty").style.display=widgets.length?"none":"flex";
+  widgets.forEach(w=>{
+    const T=TYPE[w.type];
+    const el=document.createElement("div"); el.className="w"; el.dataset.id=w.id;
+    el.style.left=w.x+"px"; el.style.top=w.y+"px"; el.style.width=T.w+"px"; el.style.height=T.h+"px";
+    const body=document.createElement("div"); body.className="body"; body.style.cssText="flex:1;display:flex;flex-direction:column";
+    buildBody(w,body);
+    el.appendChild(body);
+    // 編輯用：拖曳層 + 刪除鈕
+    const drag=document.createElement("div"); drag.className="drag"; el.appendChild(drag);
+    const del=document.createElement("div"); del.className="del"; del.textContent="×"; el.appendChild(del);
+    del.addEventListener("pointerdown",ev=>{ev.stopPropagation(); widgets=widgets.filter(x=>x.id!==w.id); render(); persist();});
+    enableDrag(drag,el,w);
+    cv.appendChild(el);
+    w._el=el;
+  });
+}
+
+/* 建立各元件內容 */
+function buildBody(w,body){
+  const c=w.cfg, T=TYPE[w.type];
+  if(w.type==="dpad"){
+    body.innerHTML='<div class="dpad">'+
+      '<button class="u">▲</button><button class="l">◀</button>'+
+      '<button class="c">方向</button><button class="r">▶</button><button class="d">▼</button></div>';
+    const map={u:"up",l:"left",r:"right",d:"down"};
+    body.querySelectorAll(".dpad button").forEach(btn=>{
+      const dir=[...btn.classList].find(x=>map[x]); if(!dir) return;
+      btn.addEventListener("pointerdown",e=>{e.preventDefault(); send(c[map[dir]]);});
+      btn.addEventListener("pointerup",e=>{e.preventDefault(); if(c.stop) send(c.stop);});
+      btn.addEventListener("pointerleave",e=>{ if(e.buttons&&c.stop) send(c.stop);});
+    });
+  }
+  else if(w.type==="button"){
+    body.innerHTML=`<button class="bigbtn">${esc(c.label)}</button>`;
+    const b=body.querySelector("button");
+    b.addEventListener("pointerdown",e=>{e.preventDefault(); send(c.cmd);});
+    b.addEventListener("pointerup",e=>{e.preventDefault(); if(c.release) send(c.release);});
+  }
+  else if(w.type==="slider"){
+    body.innerHTML=`<div class="cap">${esc(c.label)}</div><div class="sl">
+      <div class="row"><span>${esc(c.key)}</span><span class="sv">${c.min}</span></div>
+      <input type="range" min="${c.min}" max="${c.max}" value="${c.min}"></div>`;
+    const inp=body.querySelector("input"), sv=body.querySelector(".sv");
+    inp.addEventListener("input",e=>{ sv.textContent=e.target.value; send(c.key+":"+e.target.value); });
+  }
+  else if(w.type==="joystick"){
+    body.innerHTML='<div class="joy"><div class="knob"></div></div>';
+    setupJoystick(body.querySelector(".joy"),c);
+  }
+  else if(w.type==="drive"){
+    body.innerHTML='<div style="display:flex;flex-direction:column;gap:6px;flex:1">'+
+      '<button class="thr" style="flex:1.4;border-radius:12px;font-size:19px;background:var(--ok)">油門</button>'+
+      '<div style="display:flex;gap:6px;flex:1">'+
+      '<button class="st" data-s="-1" style="flex:1;border-radius:12px;font-size:22px">◀</button>'+
+      '<button class="st" data-s="1" style="flex:1;border-radius:12px;font-size:22px">▶</button></div></div>';
+    setupDrive(body,c);
+  }
+  else if(w.type==="number"){
+    body.innerHTML=`<div class="cap">${esc(c.label)}</div><div class="num"><div class="v">–</div>
+      <div style="font-size:12px;color:var(--muted)">${esc(c.key||"未設定")}</div></div>`;
+  }
+  else if(w.type==="chart"){
+    body.innerHTML=`<div class="cap">${esc(c.label)}（${esc(c.key||"未設定")}）</div><canvas></canvas>`;
+    w._data=w._data||[];
+  }
+  else if(w.type==="gauge"){
+    body.innerHTML=`<div class="cap">${esc(c.label)}</div>
+      <div class="ring" style="--p:0"><b>–</b></div>
+      <div style="font-size:12px;color:var(--muted);text-align:center">${esc(c.key||"未設定")}</div>`;
+  }
+  else if(w.type==="led"){
+    body.innerHTML=`<div class="cap">${esc(c.label)}</div><div class="led">
+      <div class="lamp"></div><div style="font-size:12px;color:var(--muted)">${esc(c.key||"未設定")} ${esc(c.cmp)} ${c.thr}</div></div>`;
+  }
+}
+
+/* 搖桿邏輯 */
+function setupJoystick(el,c){
+  const knob=el.querySelector(".knob"); let active=false, last=0;
+  const R=()=>Math.min(el.clientWidth,el.clientHeight)/2-24;
+  function move(ev){
+    if(!active) return;
+    const r=el.getBoundingClientRect();
+    let dx=ev.clientX-(r.left+r.width/2), dy=ev.clientY-(r.top+r.height/2);
+    const max=R(), d=Math.hypot(dx,dy); if(d>max){ dx=dx/d*max; dy=dy/d*max; }
+    knob.style.left=(r.width/2+dx)+"px"; knob.style.top=(r.height/2+dy)+"px";
+    const x=Math.round(dx/max*100), y=Math.round(-dy/max*100);
+    const now=Date.now(); if(now-last>80){ last=now; send(`${c.cmd}:${x},${y}`); }
+  }
+  el.addEventListener("pointerdown",e=>{e.preventDefault(); active=true; el.setPointerCapture(e.pointerId); move(e);});
+  el.addEventListener("pointermove",move);
+  el.addEventListener("pointerup",e=>{ active=false; knob.style.left="50%"; knob.style.top="50%"; send(`${c.cmd}:0,0`); });
+}
+
+/* 駕駛（油門＋左右）：組合狀態 S/F/FL/FR/L/R */
+function setupDrive(root,c){
+  let thr=false,steer=0,last=null;
+  function emit(){
+    const code = !thr ? (steer<0?"L":steer>0?"R":"S") : (steer<0?"FL":steer>0?"FR":"F");
+    if(code!==last){ last=code; send(c.cmd+":"+code); }
+  }
+  const t=root.querySelector(".thr");
+  t.addEventListener("pointerdown",e=>{e.preventDefault();t.setPointerCapture(e.pointerId);thr=true;emit();});
+  t.addEventListener("pointerup",e=>{thr=false;emit();});
+  root.querySelectorAll(".st").forEach(b=>{ const s=Number(b.dataset.s);
+    b.addEventListener("pointerdown",e=>{e.preventDefault();b.setPointerCapture(e.pointerId);steer=s;emit();});
+    b.addEventListener("pointerup",e=>{steer=0;emit();});
+  });
+}
+
+/* ===================== 拖曳移動 ===================== */
+function enableDrag(handle,el,w){
+  let sx,sy,ox,oy,moved;
+  handle.addEventListener("pointerdown",e=>{
+    if(!editMode) return; e.preventDefault(); handle.setPointerCapture(e.pointerId);
+    sx=e.clientX; sy=e.clientY; ox=w.x; oy=w.y; moved=false;
+  });
+  handle.addEventListener("pointermove",e=>{
+    if(e.buttons!==1) return;
+    const dx=e.clientX-sx, dy=e.clientY-sy;
+    if(Math.abs(dx)+Math.abs(dy)>4) moved=true;
+    w.x=Math.max(0,Math.round((ox+dx)/8)*8); w.y=Math.max(0,Math.round((oy+dy)/8)*8);
+    el.style.left=w.x+"px"; el.style.top=w.y+"px";
+  });
+  handle.addEventListener("pointerup",e=>{
+    if(!moved){ openConfig(w); } else persist();
+  });
+}
+
+/* ===================== 設定視窗 ===================== */
+let editing=null;
+function openConfig(w){
+  editing=w; $("mTitle").textContent=TYPE[w.type].name+" 設定";
+  const box=$("mFields"); box.innerHTML="";
+  SCHEMA[w.type].forEach(([k,label,t])=>{
+    const f=document.createElement("div"); f.className="fld";
+    let ctrl;
+    if(t==="k"){
+      ctrl=document.createElement("select");
+      ctrl.innerHTML='<option value="">（自動：收到資料後可選）</option>'+
+        [...seenKeys].map(k2=>`<option>${esc(k2)}</option>`).join("");
+      if(w.cfg[k]&&!seenKeys.has(w.cfg[k])) ctrl.innerHTML+=`<option selected>${esc(w.cfg[k])}</option>`;
+      ctrl.value=w.cfg[k]||"";
+    }else if(t==="c"){
+      ctrl=document.createElement("select");
+      ["> ",">=","< ","<=","=="].forEach(o=>{const op=o.trim();ctrl.innerHTML+=`<option value="${op}">${op}</option>`;});
+      ctrl.value=w.cfg[k];
+    }else{
+      ctrl=document.createElement("input"); ctrl.type=(t==="n")?"number":"text"; ctrl.value=w.cfg[k];
+    }
+    ctrl.dataset.k=k; ctrl.dataset.t=t;
+    f.innerHTML=`<label>${label}</label>`; f.appendChild(ctrl); box.appendChild(f);
+  });
+  $("modal").classList.add("show");
+}
+$("mCancel").onclick=()=>$("modal").classList.remove("show");
+$("mOk").onclick=()=>{
+  $("mFields").querySelectorAll("[data-k]").forEach(ctrl=>{
+    let v=ctrl.value; if(ctrl.dataset.t==="n") v=Number(v);
+    editing.cfg[ctrl.dataset.k]=v;
+  });
+  $("modal").classList.remove("show"); render(); persist();
+};
+
+/* ===================== 儀表板更新 ===================== */
+function updateDash(){
+  widgets.forEach(w=>{
+    if(TYPE[w.type].kind!=="dash"||!w._el) return;
+    const key=w.cfg.key, val=latest[key];
+    if(w.type==="number"){
+      w._el.querySelector(".v").textContent=(val===undefined?"–":val);
+    }else if(w.type==="gauge"){
+      const ring=w._el.querySelector(".ring"), b=ring.querySelector("b");
+      if(val===undefined){ b.textContent="–"; ring.style.setProperty("--p",0); }
+      else{ b.textContent=val; const p=Math.max(0,Math.min(100,(val-w.cfg.min)/(w.cfg.max-w.cfg.min)*100)); ring.style.setProperty("--p",p); }
+    }else if(w.type==="led"){
+      const lamp=w._el.querySelector(".lamp"); let on=false;
+      if(val!==undefined){ const t=w.cfg.thr, cmp=w.cfg.cmp;
+        on = cmp===">"?val>t : cmp===">="?val>=t : cmp==="<"?val<t : cmp==="<="?val<=t : val==t; }
+      lamp.classList.toggle("on",on);
+    }else if(w.type==="chart"){
+      if(val!==undefined){ w._data.push(Number(val)); if(w._data.length>80) w._data.shift(); drawChart(w); }
+    }
+  });
+}
+function drawChart(w){
+  const cv=w._el.querySelector("canvas"); if(!cv) return;
+  const cssW=cv.clientWidth||280, cssH=cv.clientHeight||120;
+  if(cv.width!==cssW){cv.width=cssW;} if(cv.height!==cssH){cv.height=cssH;}
+  const ctx=cv.getContext("2d"), d=w._data, W=cv.width, H=cv.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle="#eef2f7"; for(let g=0;g<=3;g++){const y=g*H/3;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  if(d.length<2) return;
+  const mn=Math.min(...d), mx=Math.max(...d), rng=(mx-mn)||1;
+  ctx.strokeStyle="#2b6cb0"; ctx.lineWidth=2; ctx.beginPath();
+  d.forEach((v,i)=>{ const x=i*(W/(d.length-1)), y=H-8-((v-mn)/rng)*(H-16); i?ctx.lineTo(x,y):ctx.moveTo(x,y); });
+  ctx.stroke();
+}
+
+/* ===================== BLE 連線 ===================== */
+$("conn").onclick=async()=>{
+  if(!navigator.bluetooth){ alert("這個瀏覽器不支援藍牙。\n請用 App Store 的免費瀏覽器「Bluefy」開啟本頁。"); return; }
+  if(connected){ try{device.gatt.disconnect();}catch(e){} return; }
+  try{
+    device=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"BBC micro:bit"}],optionalServices:[UART]});
+    device.addEventListener("gattserverdisconnected",()=>setConn(false));
+    const srv=await(await device.gatt.connect()).getPrimaryService(UART);
+    for(const ch of await srv.getCharacteristics()){
+      if(ch.properties.notify){ txChar=ch; await ch.startNotifications(); ch.addEventListener("characteristicvaluechanged",onData); }
+      if(ch.properties.write||ch.properties.writeWithoutResponse) rxChar=ch;
+    }
+    setConn(true);
+  }catch(e){ setConn(false); }
+};
+function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
+  $("stat").textContent=v?"已連線":"未連線"; $("conn").textContent=v?"斷線":"連線"; $("conn").classList.toggle("ghost",v); }
+
+const dec=new TextDecoder();
+function onData(e){
+  rxBuf+=dec.decode(e.target.value); let i;
+  while((i=rxBuf.indexOf("\n"))>=0){ const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1); if(line) parse(line); }
+}
+function parse(line){
+  let got=false;
+  line.split(",").forEach(tok=>{ const p=tok.indexOf(":"); if(p>0){
+    const k=tok.slice(0,p).trim(), raw=tok.slice(p+1).trim();
+    latest[k]=isNaN(Number(raw))?raw:Number(raw); seenKeys.add(k); got=true; }});
+  if(got) updateDash();
+}
+
+const enc=new TextEncoder();
+async function send(str){
+  if(editMode||!connected||!rxChar||!str) return;
+  try{ const d=enc.encode(str+"\n");
+    for(let i=0;i<d.length;i+=20){ const c=d.slice(i,i+20);
+      if(rxChar.properties.writeWithoutResponse) await rxChar.writeValueWithoutResponse(c); else await rxChar.writeValue(c); }
+  }catch(e){}
+}
+
+function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
+
+/* ===================== 啟動 ===================== */
+if(!navigator.bluetooth){ $("hint").innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
+loadCurrent(); refreshLayoutList(); render();
+</script>
+</body>
+</html>
