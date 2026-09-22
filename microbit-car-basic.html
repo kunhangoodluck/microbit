@@ -41,7 +41,8 @@
   #canvas.edit{background-image:linear-gradient(var(--grid) 1px,transparent 1px),
     linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px}
   .w{position:absolute;background:var(--card);border:1px solid var(--line);border-radius:14px;
-    box-shadow:var(--shadow);padding:8px;display:flex;flex-direction:column;font-size:15px}
+    box-shadow:var(--shadow);padding:8px;display:flex;flex-direction:column;font-size:15px;touch-action:none}
+  .w .knob{touch-action:none}
   .w .cap{font-size:.8em;color:var(--muted);text-align:center;margin-bottom:2px}
   .edit .w{cursor:move}
   .w .drag{position:absolute;inset:0;border-radius:14px;z-index:3;display:none}
@@ -127,12 +128,6 @@
   <button data-add="chart">＋折線圖</button>
   <button data-add="gauge">＋儀表盤</button>
   <button data-add="led">＋燈號</button>
-</div>
-
-<div class="hint show" id="hint">
-  👉 這是<b>基本版</b>：只有三種輸入 —— <b>按鈕</b>（送 代號:1／代號:0）、<b>方向盤／滑桿</b>（送 代號:值）、<b>全向搖桿</b>（送 代號:x,y）。<br>
-  點 <b>★ 基本版面</b> 一鍵擺好一台能開的車；或自己從選盤加元件、拖曳、點元件設定、右上 ✕ 刪除。<br>
-  排好切到 <b>遊玩</b> 按「連線」。iPad 請用 <b>Bluefy</b> 瀏覽器開啟。
 </div>
 
 <div id="canvas" class="edit">
@@ -351,12 +346,15 @@ function setupAxis(box,c,horiz){
     const v=valAt(ev); place(v);
     const now=Date.now(); if(now-last>70){ last=now; send(c.key+":"+v); }
   }
-  box.addEventListener("pointerdown",e=>{e.preventDefault(); active=true; box.setPointerCapture(e.pointerId); const v=valAt(e); place(v); send(c.key+":"+v);});
-  box.addEventListener("pointermove",move);
-  box.addEventListener("pointerup",e=>{ active=false;
+  function endAxis(ev){ if(!active) return; active=false;
     if(c.center){ place(centerVal); send(c.key+":"+centerVal); }
-    else{ const v=valAt(e); place(v); send(c.key+":"+v); }
-  });
+    else{ const v=valAt(ev||{clientX:0,clientY:0}); place(v); send(c.key+":"+v); }
+  }
+  box.addEventListener("pointerdown",e=>{e.preventDefault(); active=true; try{box.setPointerCapture(e.pointerId);}catch(_){} const v=valAt(e); place(v); send(c.key+":"+v);});
+  box.addEventListener("pointermove",move);
+  box.addEventListener("pointerup",endAxis);
+  box.addEventListener("pointercancel",()=>{ if(c.center) endAxis(); });
+  box.addEventListener("lostpointercapture",()=>{ if(c.center) endAxis(); });
   place(c.center?centerVal:mn);
 }
 
@@ -373,9 +371,12 @@ function setupJoystick(el,c){
     const x=Math.round(dx/max*100), y=Math.round(-dy/max*100);
     const now=Date.now(); if(now-last>80){ last=now; send(`${c.key}:${x},${y}`); }
   }
-  el.addEventListener("pointerdown",e=>{e.preventDefault(); active=true; el.setPointerCapture(e.pointerId); move(e);});
+  function endJoy(){ if(!active) return; active=false; knob.style.left="50%"; knob.style.top="50%"; send(`${c.key}:0,0`); }
+  el.addEventListener("pointerdown",e=>{e.preventDefault(); active=true; try{el.setPointerCapture(e.pointerId);}catch(_){} move(e);});
   el.addEventListener("pointermove",move);
-  el.addEventListener("pointerup",e=>{ active=false; knob.style.left="50%"; knob.style.top="50%"; send(`${c.key}:0,0`);});
+  el.addEventListener("pointerup",endJoy);
+  el.addEventListener("pointercancel",endJoy);
+  el.addEventListener("lostpointercapture",endJoy);
 }
 
 /* ===================== 拖曳移動 ===================== */
@@ -525,7 +526,7 @@ async function send(str){
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
 
 /* ===================== 啟動 ===================== */
-if(!navigator.bluetooth){ $("hint").innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
+if(!navigator.bluetooth){ const h=$("hint"); if(h) h.innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
 loadCurrent(); render();
 </script>
 </body>
