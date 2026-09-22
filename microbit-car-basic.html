@@ -161,6 +161,8 @@
 "use strict";
 const $=id=>document.getElementById(id);
 const UART="6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+const RX_C="6e400002-b5a3-f393-e0a9-e50e24dcca9e"; // iPad 寫給車
+const TX_C="6e400003-b5a3-f393-e0a9-e50e24dcca9e"; // 車通知 iPad
 
 /* ===================== 大小 ===================== */
 const SIZES={ "小":0.75, "中":1, "大":1.4 };
@@ -490,10 +492,22 @@ $("conn").onclick=async()=>{
   try{
     device=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"BBC micro:bit"}],optionalServices:[UART]});
     device.addEventListener("gattserverdisconnected",()=>setConn(false));
-    const srv=await(await device.gatt.connect()).getPrimaryService(UART);
-    for(const ch of await srv.getCharacteristics()){
-      if(ch.properties.notify){ txChar=ch; await ch.startNotifications(); ch.addEventListener("characteristicvaluechanged",onData); }
-      if(ch.properties.write||ch.properties.writeWithoutResponse) rxChar=ch;
+    const gatt=await device.gatt.connect();
+    const srv=await gatt.getPrimaryService(UART);
+    rxChar=null; txChar=null;
+    // 明確用 UUID 抓（最可靠）
+    try{ rxChar=await srv.getCharacteristic(RX_C); }catch(_){}
+    try{
+      txChar=await srv.getCharacteristic(TX_C);
+      txChar.addEventListener("characteristicvaluechanged",onData);
+      await txChar.startNotifications();
+    }catch(_){}
+    // 後備：若 UUID 抓不到，改用列舉判斷
+    if(!rxChar||!txChar){
+      for(const ch of await srv.getCharacteristics()){
+        if(!txChar && ch.properties.notify){ txChar=ch; ch.addEventListener("characteristicvaluechanged",onData); try{await ch.startNotifications();}catch(_){} }
+        if(!rxChar && (ch.properties.write||ch.properties.writeWithoutResponse)) rxChar=ch;
+      }
     }
     setConn(true);
   }catch(e){ setConn(false); }
