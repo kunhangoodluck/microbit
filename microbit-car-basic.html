@@ -498,9 +498,9 @@ $("conn").onclick=async()=>{
     let gotWrite=false, notifyErr="";
     const chars=await srv.getCharacteristics();
     const nCh=chars.length;
-    // 送（寫）：優先用 UUID，再退回屬性判斷
-    for(const ch of chars){ if(ch.uuid.toLowerCase()===RX_C){ rxChar=ch; gotWrite=true; } }
-    if(!rxChar){ for(const ch of chars){ if(ch.properties.write||ch.properties.writeWithoutResponse){ rxChar=ch; gotWrite=true; break; } } }
+    // 送（寫）：用「有寫入屬性」的特徵（這是之前會動的挑法），再退回 UUID
+    for(const ch of chars){ if(ch.properties.write||ch.properties.writeWithoutResponse){ rxChar=ch; gotWrite=true; break; } }
+    if(!rxChar){ for(const ch of chars){ if(ch.uuid.toLowerCase()===RX_C){ rxChar=ch; gotWrite=true; } } }
     // 收（通知）：優先用 UUID，再退回「有 notify 屬性」，再退回「不是寫入的那個特徵」
     for(const ch of chars){ if(ch.uuid.toLowerCase()===TX_C) txChar=ch; }
     if(!txChar){ for(const ch of chars){ if(ch.properties.notify){ txChar=ch; break; } } }
@@ -515,7 +515,7 @@ $("conn").onclick=async()=>{
         catch(err){ notifyErr=(err&&err.name)||"err"; await new Promise(r=>setTimeout(r,400)); }
       }
     } else { notifyErr="無TX特徵"; }
-    $("rx").textContent="v10 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
+    $("rx").textContent="v11 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
@@ -544,25 +544,28 @@ function parse(line){
 }
 
 const enc=new TextEncoder();
+async function writeChunk(ch,c){
+  // 兩種寫法都試，回傳哪種成功
+  try{ await ch.writeValueWithoutResponse(c); return "無回應"; }catch(e1){}
+  try{ await ch.writeValue(c); return "有回應"; }catch(e2){}
+  try{ await ch.writeValueWithResponse(c); return "有回應2"; }catch(e3){}
+  return "";
+}
 async function send(str){
   if(!str) return;
   if(editMode){ $("rx").textContent="送X 編輯模式"; return; }
   if(!connected){ $("rx").textContent="送X 未連線"; return; }
   if(!rxChar){ $("rx").textContent="送X 無寫入特徵"; return; }
-  $("rx").textContent="送 "+str;
-  try{ const d=enc.encode(str+"\n");
-    for(let i=0;i<d.length;i+=20){ const c=d.slice(i,i+20);
-      try{ if(rxChar.properties&&rxChar.properties.writeWithoutResponse) await rxChar.writeValueWithoutResponse(c); else await rxChar.writeValue(c); }
-      catch(_){ try{ await rxChar.writeValue(c); }catch(__){ $("rx").textContent="送 "+str+" 失敗"; } }
-    }
-  }catch(e){}
+  const d=enc.encode(str+"\n"); let how="";
+  for(let i=0;i<d.length;i+=20){ how=await writeChunk(rxChar,d.slice(i,i+20)); }
+  $("rx").textContent = how ? ("送 "+str+" ✓"+how) : ("送 "+str+" 失敗");
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
 
 /* ===================== 啟動 ===================== */
 if(!navigator.bluetooth){ const h=$("hint"); if(h) h.innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
 loadCurrent(); render();
-$("rx").textContent="v10";
+$("rx").textContent="v11";
 </script>
 </body>
 </html>
