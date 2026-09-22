@@ -495,24 +495,27 @@ $("conn").onclick=async()=>{
     const gatt=await device.gatt.connect();
     const srv=await gatt.getPrimaryService(UART);
     rxChar=null; txChar=null;
-    let nCh=0, gotWrite=false, notifyErr="";
-    // 先找出兩個特徵
-    for(const ch of await srv.getCharacteristics()){
-      nCh++;
-      if(ch.properties.notify) txChar=ch;
-      if(ch.properties.write||ch.properties.writeWithoutResponse){ rxChar=ch; gotWrite=true; }
-    }
+    let gotWrite=false, notifyErr="";
+    const chars=await srv.getCharacteristics();
+    const nCh=chars.length;
+    // 送（寫）：優先用 UUID，再退回屬性判斷
+    for(const ch of chars){ if(ch.uuid.toLowerCase()===RX_C){ rxChar=ch; gotWrite=true; } }
+    if(!rxChar){ for(const ch of chars){ if(ch.properties.write||ch.properties.writeWithoutResponse){ rxChar=ch; gotWrite=true; break; } } }
+    // 收（通知）：優先用 UUID，再退回「有 notify 屬性」，再退回「不是寫入的那個特徵」
+    for(const ch of chars){ if(ch.uuid.toLowerCase()===TX_C) txChar=ch; }
+    if(!txChar){ for(const ch of chars){ if(ch.properties.notify){ txChar=ch; break; } } }
+    if(!txChar){ for(const ch of chars){ if(ch!==rxChar){ txChar=ch; break; } } }
     setConn(true);
-    // 訂閱通知：先掛監聽，再重試 startNotifications（Bluefy 有時第一次會失敗）
+    // 訂閱通知：先掛監聽，再重試（不管屬性怎麼回報都試訂閱）
     let gotNotify=false;
     if(txChar){
       txChar.addEventListener("characteristicvaluechanged",onData);
-      for(let attempt=0; attempt<4 && !gotNotify; attempt++){
+      for(let attempt=0; attempt<5 && !gotNotify; attempt++){
         try{ await txChar.startNotifications(); gotNotify=true; }
         catch(err){ notifyErr=(err&&err.name)||"err"; await new Promise(r=>setTimeout(r,400)); }
       }
-    }
-    $("rx").textContent="特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
+    } else { notifyErr="無TX特徵"; }
+    $("rx").textContent="v7 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
@@ -545,6 +548,7 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;",
 /* ===================== 啟動 ===================== */
 if(!navigator.bluetooth){ const h=$("hint"); if(h) h.innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
 loadCurrent(); render();
+$("rx").textContent="v7";
 </script>
 </body>
 </html>
