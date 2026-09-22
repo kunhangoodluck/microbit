@@ -55,7 +55,8 @@
   .edit .w .badge-sz{display:block}
 
   /* 按鈕型 */
-  .bigbtn{flex:1;border-radius:12px;font-size:1.33em;background:var(--brand);color:#fff}
+  .bigbtn{flex:1;border-radius:12px;font-size:1.33em;background:var(--brand);color:#fff;touch-action:none}
+  .axis,.joy{touch-action:none}
   .bigbtn.on{background:var(--ok);color:#fff}
   .skey{font-size:.8em;color:var(--muted);text-align:center;margin-top:3px}
   /* ±軸型（方向盤/滑桿）*/
@@ -104,6 +105,7 @@
   <div class="dot" id="dot"></div>
   <div class="stat" id="stat">未連線</div>
   <button id="conn">連線</button>
+  <div class="stat" id="rx" style="min-width:0;font-weight:400;color:var(--muted);font-size:12px"></div>
   <div class="seg">
     <button id="mEdit" class="active">編輯</button>
     <button id="mPlay">遊玩</button>
@@ -408,9 +410,10 @@ function openConfig(w){
     let ctrl;
     if(t==="k"){
       ctrl=document.createElement("select");
-      ctrl.innerHTML='<option value="">（自動：收到資料後可選）</option>'+
-        [...seenKeys].map(k2=>`<option>${esc(k2)}</option>`).join("");
-      if(w.cfg[k]&&!seenKeys.has(w.cfg[k])) ctrl.innerHTML+=`<option selected>${esc(w.cfg[k])}</option>`;
+      const common=["LINE","LIGHT","SOUND","DIST","TEMP"];
+      const keys=[]; common.forEach(x=>keys.push(x)); [...seenKeys].forEach(x=>{ if(keys.indexOf(x)<0) keys.push(x); });
+      if(w.cfg[k]&&keys.indexOf(w.cfg[k])<0) keys.push(w.cfg[k]);
+      ctrl.innerHTML='<option value="">（未設定）</option>'+keys.map(k2=>`<option>${esc(k2)}</option>`).join("");
       ctrl.value=w.cfg[k]||"";
     }else if(t==="c"){
       ctrl=document.createElement("select");
@@ -495,12 +498,13 @@ $("conn").onclick=async()=>{
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
-  $("stat").textContent=v?"已連線":"未連線"; $("conn").textContent=v?"斷線":"連線"; $("conn").classList.toggle("ghost",v); }
+  $("stat").textContent=v?"已連線":"未連線"; $("conn").textContent=v?"斷線":"連線"; $("conn").classList.toggle("ghost",v);
+  if(!v) $("rx").textContent=""; }
 
 const dec=new TextDecoder();
 function onData(e){
   rxBuf+=dec.decode(e.target.value); let i;
-  while((i=rxBuf.indexOf("\n"))>=0){ const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1); if(line) parse(line); }
+  while((i=rxBuf.indexOf("\n"))>=0){ const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1); if(line){ $("rx").textContent="收 "+line; parse(line); } }
 }
 function parse(line){
   let got=false;
