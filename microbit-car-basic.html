@@ -515,7 +515,7 @@ $("conn").onclick=async()=>{
         catch(err){ notifyErr=(err&&err.name)||"err"; await new Promise(r=>setTimeout(r,400)); }
       }
     } else { notifyErr="無TX特徵"; }
-    $("rx").textContent="v7 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
+    $("rx").textContent="v9 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
@@ -523,16 +523,24 @@ function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
   if(!v) $("rx").textContent=""; }
 
 const dec=new TextDecoder();
+let rxCount=0;
 function onData(e){
-  rxBuf+=dec.decode(e.target.value); let i;
-  while((i=rxBuf.indexOf("\n"))>=0){ const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1); if(line){ $("rx").textContent="收 "+line; parse(line); } }
+  try{
+    const dv=e&&e.target&&e.target.value; if(!dv) return;
+    const chunk=dec.decode(dv); rxBuf+=chunk; rxCount++;
+    $("rx").textContent="原始#"+rxCount+" ["+chunk.replace(/\n/g,"⏎")+"]";
+    let i;
+    while((i=rxBuf.indexOf("\n"))>=0){ const line=rxBuf.slice(0,i).trim(); rxBuf=rxBuf.slice(i+1); if(line){ $("rx").textContent="收 "+line; parse(line); } }
+  }catch(err){ /* 收訊出錯不影響遙控 */ }
 }
 function parse(line){
-  let got=false;
-  line.split(",").forEach(tok=>{ const p=tok.indexOf(":"); if(p>0){
-    const k=tok.slice(0,p).trim(), raw=tok.slice(p+1).trim();
-    latest[k]=isNaN(Number(raw))?raw:Number(raw); seenKeys.add(k); got=true; }});
-  if(got) updateDash();
+  try{
+    let got=false;
+    line.split(",").forEach(tok=>{ const p=tok.indexOf(":"); if(p>0){
+      const k=tok.slice(0,p).trim(), raw=tok.slice(p+1).trim();
+      latest[k]=isNaN(Number(raw))?raw:Number(raw); seenKeys.add(k); got=true; }});
+    if(got) updateDash();
+  }catch(err){}
 }
 
 const enc=new TextEncoder();
@@ -540,7 +548,9 @@ async function send(str){
   if(editMode||!connected||!rxChar||!str) return;
   try{ const d=enc.encode(str+"\n");
     for(let i=0;i<d.length;i+=20){ const c=d.slice(i,i+20);
-      if(rxChar.properties.writeWithoutResponse) await rxChar.writeValueWithoutResponse(c); else await rxChar.writeValue(c); }
+      try{ if(rxChar.properties&&rxChar.properties.writeWithoutResponse) await rxChar.writeValueWithoutResponse(c); else await rxChar.writeValue(c); }
+      catch(_){ try{ await rxChar.writeValue(c); }catch(__){} }
+    }
   }catch(e){}
 }
 function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m])); }
@@ -548,7 +558,7 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;",
 /* ===================== 啟動 ===================== */
 if(!navigator.bluetooth){ const h=$("hint"); if(h) h.innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
 loadCurrent(); render();
-$("rx").textContent="v7";
+$("rx").textContent="v9";
 </script>
 </body>
 </html>
