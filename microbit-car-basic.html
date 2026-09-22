@@ -109,6 +109,8 @@
     <button id="mPlay">遊玩</button>
   </div>
   <div class="spacer"></div>
+  <button class="ghost" id="exp">匯出</button>
+  <button class="ghost" id="imp">匯入</button>
   <button class="warn" id="clear">清空</button>
 </div>
 
@@ -142,6 +144,18 @@
     <div class="acts">
       <button class="ghost" id="mCancel">取消</button>
       <button id="mOk">確定</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="expModal">
+  <div class="sheet">
+    <h3>版面代碼</h3>
+    <p style="font-size:13px;color:var(--muted);margin:0 0 8px">按「複製」把代碼交到表單／傳給別台 iPad；別台用「匯入」貼回去就還原。</p>
+    <textarea id="expText" readonly style="width:100%;height:120px;font-size:12px;padding:9px;border:1px solid var(--line);border-radius:10px;font-family:ui-monospace,Menlo,Consolas,monospace"></textarea>
+    <div class="acts">
+      <button class="ghost" id="expClose">關閉</button>
+      <button id="expCopy">複製</button>
     </div>
   </div>
 </div>
@@ -186,15 +200,38 @@ function persist(){ try{ localStorage.setItem(LS_CUR,JSON.stringify(strip(widget
 function loadCurrent(){ try{ const d=JSON.parse(localStorage.getItem(LS_CUR)); if(Array.isArray(d)){widgets=d; uid=Math.max(1,...d.map(w=>w.id))+1;} }catch(e){} }
 $("clear").onclick=()=>{ if(confirm("清空畫布？")){ widgets=[]; render(); persist(); } };
 
+/* ===================== 匯出／匯入版面（跨裝置收集用）===================== */
+function encodeLayout(){ return btoa(unescape(encodeURIComponent(JSON.stringify(strip(widgets))))); }
+function decodeLayout(code){ return JSON.parse(decodeURIComponent(escape(atob(code.trim())))); }
+$("exp").onclick=()=>{
+  if(!widgets.length){ alert("畫布是空的，沒有版面可以匯出。"); return; }
+  $("expText").value=encodeLayout(); $("expModal").classList.add("show");
+  setTimeout(()=>{ $("expText").focus(); $("expText").select(); },50);
+};
+$("expClose").onclick=()=>$("expModal").classList.remove("show");
+$("expCopy").onclick=async()=>{
+  const t=$("expText"); t.focus(); t.select();
+  try{ await navigator.clipboard.writeText(t.value); $("expCopy").textContent="已複製"; setTimeout(()=>$("expCopy").textContent="複製",1200); }
+  catch(e){ try{ document.execCommand("copy"); $("expCopy").textContent="已複製"; setTimeout(()=>$("expCopy").textContent="複製",1200);}catch(_){ alert("請長按上方文字框，全選後複製。"); } }
+};
+$("imp").onclick=()=>{
+  const code=prompt("貼上版面代碼："); if(!code) return;
+  let d; try{ d=decodeLayout(code); }catch(e){ alert("代碼看起來不正確，請重新複製整段。"); return; }
+  if(!Array.isArray(d)||!d.length){ alert("代碼內沒有版面資料。"); return; }
+  if(widgets.length && !confirm("匯入會取代目前畫布，確定？")) return;
+  widgets=d; uid=Math.max(1,...d.map(w=>w.id))+1; render(); persist();
+};
+
 /* ===================== 基本版面（一鍵擺好能開的車）===================== */
 function loadBasic(){
   if(widgets.length && !confirm("載入基本版面會取代目前畫布，確定？")) return;
   widgets=[
-    {id:1,type:"axis",x:20,y:20,size:"大",cfg:{label:"方向盤",key:"STEER",dir:"h",min:-100,max:100,center:true}},
-    {id:2,type:"button",x:20,y:212,size:"中",cfg:{label:"油門",key:"GO",latch:false}},
-    {id:3,type:"number",x:320,y:20,size:"中",cfg:{label:"感測值",key:""}},
+    {id:1,type:"button",x:150,y:20,size:"大",cfg:{label:"前進",key:"FWD",latch:false}},
+    {id:2,type:"button",x:20,y:190,size:"大",cfg:{label:"左",key:"LEFT",latch:false}},
+    {id:3,type:"button",x:280,y:190,size:"大",cfg:{label:"右",key:"RIGHT",latch:false}},
+    {id:4,type:"number",x:150,y:190,size:"中",cfg:{label:"循跡",key:""}},
   ];
-  uid=4; render(); persist();
+  uid=5; render(); persist();
 }
 $("palette").querySelector("[data-basic]").onclick=loadBasic;
 
