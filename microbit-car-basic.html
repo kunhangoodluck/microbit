@@ -495,19 +495,24 @@ $("conn").onclick=async()=>{
     const gatt=await device.gatt.connect();
     const srv=await gatt.getPrimaryService(UART);
     rxChar=null; txChar=null;
-    let nCh=0, gotNotify=false, gotWrite=false;
+    let nCh=0, gotWrite=false, notifyErr="";
+    // 先找出兩個特徵
     for(const ch of await srv.getCharacteristics()){
       nCh++;
-      if(ch.properties.notify){
-        txChar=ch;
-        ch.addEventListener("characteristicvaluechanged",onData);
-        try{ await ch.startNotifications(); gotNotify=true; }catch(err){ gotNotify=false; }
-      }
+      if(ch.properties.notify) txChar=ch;
       if(ch.properties.write||ch.properties.writeWithoutResponse){ rxChar=ch; gotWrite=true; }
     }
     setConn(true);
-    // 畫面診斷：特徵數 / 可收 / 可送
-    $("rx").textContent="特徵"+nCh+" 收:"+(gotNotify?"O":"X")+" 送:"+(gotWrite?"O":"X");
+    // 訂閱通知：先掛監聽，再重試 startNotifications（Bluefy 有時第一次會失敗）
+    let gotNotify=false;
+    if(txChar){
+      txChar.addEventListener("characteristicvaluechanged",onData);
+      for(let attempt=0; attempt<4 && !gotNotify; attempt++){
+        try{ await txChar.startNotifications(); gotNotify=true; }
+        catch(err){ notifyErr=(err&&err.name)||"err"; await new Promise(r=>setTimeout(r,400)); }
+      }
+    }
+    $("rx").textContent="特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
