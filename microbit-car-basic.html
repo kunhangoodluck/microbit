@@ -495,21 +495,19 @@ $("conn").onclick=async()=>{
     const gatt=await device.gatt.connect();
     const srv=await gatt.getPrimaryService(UART);
     rxChar=null; txChar=null;
-    // 明確用 UUID 抓（最可靠）
-    try{ rxChar=await srv.getCharacteristic(RX_C); }catch(_){}
-    try{
-      txChar=await srv.getCharacteristic(TX_C);
-      txChar.addEventListener("characteristicvaluechanged",onData);
-      await txChar.startNotifications();
-    }catch(_){}
-    // 後備：若 UUID 抓不到，改用列舉判斷
-    if(!rxChar||!txChar){
-      for(const ch of await srv.getCharacteristics()){
-        if(!txChar && ch.properties.notify){ txChar=ch; ch.addEventListener("characteristicvaluechanged",onData); try{await ch.startNotifications();}catch(_){} }
-        if(!rxChar && (ch.properties.write||ch.properties.writeWithoutResponse)) rxChar=ch;
+    let nCh=0, gotNotify=false, gotWrite=false;
+    for(const ch of await srv.getCharacteristics()){
+      nCh++;
+      if(ch.properties.notify){
+        txChar=ch;
+        ch.addEventListener("characteristicvaluechanged",onData);
+        try{ await ch.startNotifications(); gotNotify=true; }catch(err){ gotNotify=false; }
       }
+      if(ch.properties.write||ch.properties.writeWithoutResponse){ rxChar=ch; gotWrite=true; }
     }
     setConn(true);
+    // 畫面診斷：特徵數 / 可收 / 可送
+    $("rx").textContent="特徵"+nCh+" 收:"+(gotNotify?"O":"X")+" 送:"+(gotWrite?"O":"X");
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
