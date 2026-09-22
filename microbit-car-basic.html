@@ -515,7 +515,7 @@ $("conn").onclick=async()=>{
         catch(err){ notifyErr=(err&&err.name)||"err"; await new Promise(r=>setTimeout(r,400)); }
       }
     } else { notifyErr="無TX特徵"; }
-    $("rx").textContent="v9 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
+    $("rx").textContent="v10 特徵"+nCh+" 送:"+(gotWrite?"O":"X")+" 收:"+(gotNotify?"O":"X"+(notifyErr?"("+notifyErr+")":""));
   }catch(e){ setConn(false); }
 };
 function setConn(v){ connected=v; $("dot").classList.toggle("on",v);
@@ -545,11 +545,15 @@ function parse(line){
 
 const enc=new TextEncoder();
 async function send(str){
-  if(editMode||!connected||!rxChar||!str) return;
+  if(!str) return;
+  if(editMode){ $("rx").textContent="送X 編輯模式"; return; }
+  if(!connected){ $("rx").textContent="送X 未連線"; return; }
+  if(!rxChar){ $("rx").textContent="送X 無寫入特徵"; return; }
+  $("rx").textContent="送 "+str;
   try{ const d=enc.encode(str+"\n");
     for(let i=0;i<d.length;i+=20){ const c=d.slice(i,i+20);
       try{ if(rxChar.properties&&rxChar.properties.writeWithoutResponse) await rxChar.writeValueWithoutResponse(c); else await rxChar.writeValue(c); }
-      catch(_){ try{ await rxChar.writeValue(c); }catch(__){} }
+      catch(_){ try{ await rxChar.writeValue(c); }catch(__){ $("rx").textContent="送 "+str+" 失敗"; } }
     }
   }catch(e){}
 }
@@ -558,7 +562,7 @@ function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,m=>({"&":"&amp;",
 /* ===================== 啟動 ===================== */
 if(!navigator.bluetooth){ const h=$("hint"); if(h) h.innerHTML="⚠️ 這個瀏覽器不支援 Web Bluetooth。請用 App Store 免費的 <b>Bluefy</b> 瀏覽器開啟本頁，才能連線 micro:bit。"; }
 loadCurrent(); render();
-$("rx").textContent="v9";
+$("rx").textContent="v10";
 </script>
 </body>
 </html>
